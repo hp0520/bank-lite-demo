@@ -1,19 +1,29 @@
 pipeline {
   agent any
-
   environment {
     IMAGE_NAME = "bank-lite-demo"
     IMAGE_TAG  = "${BUILD_NUMBER}"
   }
-
   options { timestamps() }
 
   stages {
     stage('Checkout') {
       steps {
+        // keep if you want, now it will succeed
         deleteDir()
         checkout scm
         sh 'mkdir -p reports'
+      }
+    }
+
+    // NEW: capture host UID/GID so containers don’t write root-owned files
+    stage('Init UID/GID') {
+      steps {
+        script {
+          env.HOST_UID = sh(returnStdout: true, script: 'id -u').trim()
+          env.HOST_GID = sh(returnStdout: true, script: 'id -g').trim()
+          sh 'echo "Using UID=${HOST_UID} GID=${HOST_GID}"'
+        }
       }
     }
 
@@ -21,8 +31,9 @@ pipeline {
       steps {
         sh '''
           docker run --rm \
+            --user ${HOST_UID}:${HOST_GID} \
             -v "$PWD":/ws \
-            -v "$HOME/.m2":/root/.m2 \
+            -v "$HOME/.m2":/m2 -e MAVEN_CONFIG=/m2 \
             -w /ws maven:3.9-eclipse-temurin-17 \
             mvn -B -e clean verify
         '''
@@ -38,8 +49,9 @@ pipeline {
       steps {
         sh '''
           docker run --rm \
+            --user ${HOST_UID}:${HOST_GID} \
             -v "$PWD":/ws \
-            -v "$HOME/.m2":/root/.m2 \
+            -v "$HOME/.m2":/m2 -e MAVEN_CONFIG=/m2 \
             -w /ws maven:3.9-eclipse-temurin-17 \
             mvn -q -DskipTests package
         '''
