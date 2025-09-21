@@ -6,3 +6,7 @@ target/
 *.iml
 *.log
 .DS_Store
+.env
+*.pem
+*.p12
+*.key
